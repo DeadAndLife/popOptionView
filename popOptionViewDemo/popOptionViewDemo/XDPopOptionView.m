@@ -18,6 +18,7 @@
         self.topMargin = 18.0f;
         self.bottomMargin = 18.0f;
         self.animationDuration = 0.8f;
+        self.showingBackgroundColor = [UIColor colorWithRed:0/255 green:0/255 blue:0/255 alpha:0.5];
     }
     
     return self;
@@ -39,9 +40,14 @@
 
 @interface XDPopOptionView ()
 
+@property (nonatomic, strong) UIView *contentView;
+
 @property (nonatomic, strong) UIScrollView *scrollView;
 
 @property (nonatomic, strong, readwrite) NSArray<UIView *> *subOptionViews;
+
+@property (nonatomic, strong) UIView *lastSuperView;
+@property (nonatomic, assign) CGRect lastFrame;
 
 @end
 
@@ -58,14 +64,16 @@
 - (instancetype)init {
     if (self = [super init]) {
         [self viewInit];
+        
+        UITapGestureRecognizer *tapGR = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapGR:)];
+        tapGR.numberOfTapsRequired = 1;
+        [self addGestureRecognizer:tapGR];
     }
     return self;
 }
 
 - (void)viewInit {
-    self.backgroundColor = [UIColor clearColor];
-    [self addSubview:self.scrollView];
-    [self addSubview:self.switchButton];
+    [self addSubview:self.contentView];
 }
 
 - (instancetype)initWithSubviews:(NSArray<UIView *> *)subviews configuration:(nonnull XDPopOptionConfiguration *)configuration {
@@ -87,7 +95,7 @@
         }];
         
         self.switchButton.frame = CGRectMake(0, 0, configuration.itemSize.width, configuration.itemSize.height);
-
+        self.contentView.frame = self.switchButton.frame;
         self.scrollView.frame = self.switchButton.frame;
        
         if (subviews.count == 0) {
@@ -108,6 +116,16 @@
         
     }
     return self;
+}
+
+- (UIView *)contentView {
+    if (!_contentView) {
+        _contentView = [[UIView alloc] init];
+        
+        [_contentView addSubview:self.scrollView];
+        [_contentView addSubview:self.switchButton];
+    }
+    return _contentView;
 }
 
 - (UIButton *)switchButton {
@@ -144,20 +162,34 @@
     CGFloat buttonOffset = 0.3*self.configuration.itemSize.width;
     CGFloat totalW = radius+self.scrollView.contentSize.width+self.configuration.itemSize.width+buttonOffset*2;
     
-    self.layer.cornerRadius = radius;
+    self.contentView.layer.cornerRadius = radius;
     
-    CGRect finishRect = self.frame;
+    CGRect finishRect = [self.contentView convertRect:self.contentView.bounds toView:[UIApplication sharedApplication].keyWindow];
     CGRect scrollViewRect = self.scrollView.frame;
     CGRect switchButtonRect = self.switchButton.frame;
+    
+    self.lastSuperView = self.superview;
+    //    [self removeFromSuperview];
+        
+    [[UIApplication sharedApplication].keyWindow addSubview:self];
+    self.frame = [UIApplication sharedApplication].keyWindow.bounds;
+    finishRect.origin.y = CGRectGetMinY(finishRect)-self.configuration.topMargin;
+    finishRect.size.height = self.configuration.topMargin+self.configuration.itemSize.height+self.configuration.bottomMargin;
+    self.contentView.frame = finishRect;
+    switchButtonRect.origin.y = self.configuration.topMargin;
+    self.switchButton.frame = switchButtonRect;
+    scrollViewRect.origin.y = self.configuration.topMargin;
+    self.scrollView.frame = scrollViewRect;
+    
     switch (self.configuration.popOptionMode) {
         case XDPopOptionModeLeft:{
-            if (totalW > CGRectGetMaxX(self.frame)) {
+            if (totalW > CGRectGetMaxX(finishRect)) {
                 //超出边界
                 finishRect.origin.x = 0;
-                finishRect.size.width = CGRectGetMaxX(self.frame);
+                finishRect.size.width = CGRectGetMaxX(finishRect);
                 
             } else {
-                finishRect.origin.x = CGRectGetMaxX(self.frame)-totalW;
+                finishRect.origin.x = CGRectGetMaxX(finishRect)-totalW;
                 finishRect.size.width = totalW;
             }
             switchButtonRect.origin.x = CGRectGetWidth(finishRect)-CGRectGetWidth(switchButtonRect)-buttonOffset;
@@ -166,8 +198,8 @@
         }
             break;
         case XDPopOptionModeRight:{
-            if (totalW > [UIScreen mainScreen].bounds.size.width-CGRectGetMinX(self.frame)) {
-                finishRect.size.width = [UIScreen mainScreen].bounds.size.width-CGRectGetMinX(self.frame);
+            if (totalW > [UIScreen mainScreen].bounds.size.width-CGRectGetMinX(finishRect)) {
+                finishRect.size.width = [UIScreen mainScreen].bounds.size.width-CGRectGetMinX(finishRect);
             } else {
                 finishRect.size.width = totalW;
             }
@@ -181,10 +213,11 @@
     }
     
     [UIView animateWithDuration:self.configuration.animationDuration animations:^{
+        self.backgroundColor = self.configuration.showingBackgroundColor;
         self.switchButton.selected = true;
         self.scrollView.alpha = 1;
-        self.backgroundColor = [UIColor whiteColor];
-        self.frame = finishRect;
+        self.contentView.backgroundColor = [UIColor colorWithRed:1 green:1 blue:1 alpha:1];
+        self.contentView.frame = finishRect;
         self.switchButton.frame = switchButtonRect;
         self.scrollView.frame = scrollViewRect;
     } completion:^(BOOL finished) {
@@ -193,10 +226,13 @@
 }
 
 - (void)dismiss {
-    CGRect finishRect = self.frame;
+    
+    CGRect finishRect = self.contentView.frame;
     CGRect scrollViewRect = self.scrollView.frame;
     CGRect switchButtonRect = self.switchButton.frame;
+    
     [self bringSubviewToFront:self.switchButton];
+    
     switch (self.configuration.popOptionMode) {
         case XDPopOptionModeLeft:{
             finishRect.origin.x = CGRectGetMaxX(finishRect)-CGRectGetWidth(switchButtonRect);
@@ -217,11 +253,31 @@
         self.backgroundColor = [UIColor clearColor];
         self.scrollView.alpha = 0;
         
-        self.frame = finishRect;
+        self.contentView.frame = finishRect;
         self.switchButton.frame = switchButtonRect;
         self.scrollView.frame = scrollViewRect;
     } completion:^(BOOL finished) {
         self.scrollView.hidden = true;
+        
+        CGRect contentRect = self.contentView.frame;
+        CGRect switchButtonRect = self.switchButton.frame;
+        CGRect selfRect = [self convertRect:contentRect toView:self.lastSuperView];
+        
+        selfRect.origin.y = CGRectGetMinY(contentRect)+self.configuration.topMargin;
+        selfRect.size.height = CGRectGetHeight(switchButtonRect);
+        contentRect.origin.x = 0;
+        contentRect.origin.y = 0;
+        contentRect.size.height = CGRectGetHeight(switchButtonRect);
+        switchButtonRect.origin.y = 0;
+        
+        self.frame = selfRect;
+        self.contentView.frame = contentRect;
+        self.switchButton.frame = switchButtonRect;
+        
+        CGRect scrollViewRect = switchButtonRect;
+        self.scrollView.frame = scrollViewRect;
+        
+        [self.lastSuperView addSubview:self];
         if (self.delegate && [self.delegate respondsToSelector:@selector(cancel:)]) {
             [self.delegate cancel:self];
         }
@@ -239,6 +295,22 @@
     if (sender.selected) {
         [self show];
     } else {
+        [self dismiss];
+    }
+}
+
+- (IBAction)tapGR:(UITapGestureRecognizer *)sender {
+    CGPoint point = [sender locationInView:self];
+    
+    __block BOOL isOutSide = true;
+    [sender.view.subviews enumerateObjectsUsingBlock:^(__kindof UIView * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        if (CGRectContainsPoint(obj.frame, point)) {
+            isOutSide = false;
+            *stop = true;
+        }
+    }];
+    
+    if (isOutSide) {
         [self dismiss];
     }
 }

@@ -30,6 +30,8 @@ typedef enum : NSUInteger {
 
 @property (nonatomic, assign) NSTimeInterval animationDuration;
 
+@property (nonatomic, strong) UIColor *showingBackgroundColor;
+
 
 + (instancetype)defaultConfiguration;
 
