@@ -74,7 +74,14 @@
 
 #pragma mark - XDPopOptionViewDelegate
 - (void)popView:(XDPopOptionView *)popView selectedIndex:(NSUInteger)index {
-    NSLog(@"selected Color %@", popView.subOptionViews[index].backgroundColor);
+    
+    NSString *message = [NSString stringWithFormat:@"选中第%ld个试图，颜色是%@", index, popView.subOptionViews[index].backgroundColor];
+    
+    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"选中的视图编号" message:message preferredStyle:UIAlertControllerStyleAlert];
+    
+    [self presentViewController:alertController animated:true completion:^{
+        [alertController performSelector:@selector(dismissViewControllerAnimated:completion:) withObject:nil afterDelay:1.5f];
+    }];
     
     [popView dismiss];
 }
